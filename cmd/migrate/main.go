@@ -21,7 +21,7 @@ func main() {
 	}
 	//ensure we close the db connection once it's opened
 	defer cleanupConnection(conn)
-	migrator, err := dbConfig.NewMigrator("../../db/migrations", conn)
+	migrator, err := dbConfig.NewMigrator("file://db/migrations", conn)
 	if err != nil {
 		fmt.Printf("failed to initialize migrator: %s\n", err.Error())
 		return
