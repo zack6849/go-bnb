@@ -3,10 +3,6 @@ package database
 import (
 	"database/sql"
 	"fmt"
-
-	"github.com/golang-migrate/migrate/v4"
-	"github.com/golang-migrate/migrate/v4/database"
-	"github.com/golang-migrate/migrate/v4/database/postgres"
 )
 
 const DriverKey = "DB_DRIVER"
@@ -51,16 +47,4 @@ func (c *Configuration) GetConnectionString() string {
 
 func (c *Configuration) Open() (*sql.DB, error) {
 	return sql.Open(c.Driver, c.GetConnectionString())
-}
-
-func (c *Configuration) GetDriver(db *sql.DB) (database.Driver, error) {
-	return postgres.WithInstance(db, &postgres.Config{})
-}
-
-func (c *Configuration) NewMigrator(path string, db *sql.DB) (*migrate.Migrate, error) {
-	driver, err := c.GetDriver(db)
-	if err != nil {
-		return nil, err
-	}
-	return migrate.NewWithDatabaseInstance(path, c.Driver, driver)
 }
