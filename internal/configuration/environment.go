@@ -17,7 +17,10 @@ func Load() {
 	}
 }
 
-func GetString(key, def string) string {
+func GetString(
+	key,
+	def string,
+) string {
 	raw, ok := os.LookupEnv(key)
 	if !ok {
 		return def
@@ -25,7 +28,10 @@ func GetString(key, def string) string {
 	return raw
 }
 
-func GetInt(key string, def int) int {
+func GetInt(
+	key string,
+	def int,
+) int {
 	raw, ok := os.LookupEnv(key)
 	if !ok {
 		return def

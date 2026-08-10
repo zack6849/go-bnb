@@ -30,7 +30,10 @@ func main() {
 	}
 }
 
-func importSeedType(seedType string, db *gorm.DB) error {
+func importSeedType(
+	seedType string,
+	db *gorm.DB,
+) error {
 	path := "seed_data/" + seedType + ".csv"
 	cache := query_cache.NewCache()
 	file, err := getSeedReader(path)
@@ -78,7 +81,9 @@ func importSeedType(seedType string, db *gorm.DB) error {
 	)
 }
 
-func getSeedReader(path string) (*os.File, error) {
+func getSeedReader(
+	path string,
+) (*os.File, error) {
 	if fs.ValidPath(path) {
 		file, err := os.Open(path)
 		if err != nil {

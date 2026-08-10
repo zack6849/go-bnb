@@ -16,6 +16,13 @@ type Location struct {
 	Longitude float64
 }
 
+func GetLocation(lat float64, lng float64) Location {
+	return Location{
+		Latitude:  lat,
+		Longitude: lng,
+	}
+}
+
 // GormDataType tells GORM this field maps to a single column, not a relation.
 func (Location) GormDataType() string {
 	return "geography"
