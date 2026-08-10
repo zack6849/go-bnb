@@ -11,17 +11,58 @@ import (
 	"gorm.io/gorm"
 )
 
+type errConverter struct {
+	err error
+}
+
+func (ec *errConverter) atoi(s string, field string) int {
+	if ec.err != nil {
+		return 0
+	}
+	v, err := strconv.Atoi(s)
+	if err != nil {
+		ec.err = fmt.Errorf("failed to convert field %s value '%s' to int\n\t\t\t%w", field, s, err)
+	}
+	return v
+}
+
+func (ec *errConverter) parseFloat(s string, field string, bitSize int) float64 {
+	if ec.err != nil {
+		return 0
+	}
+	v, err := strconv.ParseFloat(s, bitSize)
+	if err != nil {
+		ec.err = fmt.Errorf("failed to convert field %s value '%f' to float\n\t\t\t, %w", field, s, err)
+	}
+	return v
+}
+
+func (ec *errConverter) parseInt(s string, field string, base, bitSize int) int64 {
+	if ec.err != nil {
+		return 0
+	}
+	v, err := strconv.ParseInt(s, base, bitSize)
+	if err != nil {
+		ec.err = fmt.Errorf("failed to convert field %s value '%s' to int\n\t\t\t, %w", field, s, err)
+	}
+	return v
+}
+
 type KeyValueRecord = map[string]string
 
 func CreateListingRecord(record KeyValueRecord, c *query_cache.CacheStore, db *gorm.DB) (domain.Listing, error) {
-	latFloat, _ := strconv.ParseFloat(record["latitude"], 64)
-	lngFloat, _ := strconv.ParseFloat(record["longitude"], 64)
-	airBnbId, _ := strconv.Atoi(record["id"])
-	accommodates, _ := strconv.Atoi(record["accommodates"])
-	numBeds, _ := strconv.Atoi(record["beds"])
-	minNights, _ := strconv.Atoi(record["minimum_nights"])
-	maxNights, _ := strconv.Atoi(record["maximum_nights"])
-	hostProfileId, _ := strconv.ParseInt(record["host_profile_id"], 10, 64)
+	ec := errConverter{}
+	latFloat := ec.parseFloat(record["latitude"], "latitutde", 64)
+	lngFloat := ec.parseFloat(record["longitude"], "longitude", 64)
+	airBnbId := ec.atoi(record["id"], "id")
+	accommodates := ec.atoi(record["accommodates"], "accommodates")
+	numBeds := ec.atoi(record["beds"], "beds")
+	minNights := ec.atoi(record["minimum_nights"], "minimum_nights")
+	maxNights := ec.atoi(record["maximum_nights"], "maximum_nights")
+	hostProfileId := ec.parseInt(record["host_profile_id"], "host_profile_id", 10, 64)
+	if ec.err != nil {
+		return domain.Listing{}, ec.err
+	}
 	//then create listing amenities records for it
 	//these all resolve to real rows, so a swallowed error here becomes a
 	//zero-value struct with a zero PK and fails much later at insert time.
@@ -125,7 +166,7 @@ func GetRoomTypeByName(c *query_cache.CacheStore, db *gorm.DB, name string) (dom
 	return GetListItemByName[domain.RoomType](c, db, name)
 }
 
-func GetHostByProfileId(c *query_cache.CacheStore, db *gorm.DB, profileId int64, values map[string]interface{}) (domain.Host, error) {
+func GetHostByProfileId(c *query_cache.CacheStore, db *gorm.DB, profileId int64, values map[string]any) (domain.Host, error) {
 	return GetRecordByFieldValue[domain.Host](c, db, "profile_id", profileId, values)
 }
 
