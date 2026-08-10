@@ -102,3 +102,16 @@ func readBatch[T any](
 	//we filled our buffer, but there should be more, tell the caller to re-try
 	return batch, true, nil
 }
+
+func ArrayCombine(keys []string, values []string) (map[string]string, error) {
+	data := make(map[string]string)
+	if len(keys) != len(values) {
+		return nil, fmt.Errorf("row does not have the same number of values as the header row")
+	}
+	for i := range len(keys) {
+		header := keys[i]
+		value := values[i]
+		data[header] = value
+	}
+	return data, nil
+}

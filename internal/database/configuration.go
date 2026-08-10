@@ -1,8 +1,10 @@
 package database
 
 import (
-	"database/sql"
 	"fmt"
+
+	"gorm.io/driver/postgres"
+	"gorm.io/gorm"
 )
 
 const DriverKey = "DB_DRIVER"
@@ -19,7 +21,7 @@ const SchemaKey = "DB_SCHEMA"
 const DefaultSchema = "gobnb"
 const SslKey = "DB_SSL"
 
-// DefaultSslMode for postgres, can be disable, allow, prefer, require, verify-ca, and verify-full
+// DefaultSslMode for postgres, can be one of: disable, allow, prefer, require, verify-ca, and verify-full
 // https://www.postgresql.org/docs/current/libpq-ssl.html#LIBPQ-SSL-SSLMODE-STATEMENTS
 const DefaultSslMode = "prefer"
 
@@ -45,6 +47,6 @@ func (c *Configuration) GetConnectionString() string {
 	)
 }
 
-func (c *Configuration) Open() (*sql.DB, error) {
-	return sql.Open(c.Driver, c.GetConnectionString())
+func (c *Configuration) Open() (*gorm.DB, error) {
+	return gorm.Open(postgres.Open(c.GetConnectionString()), &gorm.Config{})
 }

@@ -1,39 +1,38 @@
 package main
 
 import (
+	"GoBNB/internal/bootstrap"
 	"GoBNB/internal/configuration"
+	"GoBNB/internal/domain"
 	"GoBNB/internal/importer"
+	"GoBNB/internal/query_cache"
 	"fmt"
 	"io/fs"
 	"os"
+
+	"gorm.io/gorm"
 )
 
 func main() {
+	_ = bootstrap.Initialize()
 	configuration.Load()
+	db, err := configuration.GetDatabaseConfiguration().Open()
+	if err != nil {
+		fmt.Printf("failed to open db connection: %s", err.Error())
+		return
+	}
 	seedTypes := []string{"listings"}
 	for _, seedType := range seedTypes {
-		err := importSeedType(seedType)
+		err := importSeedType(seedType, db)
 		if err != nil {
 			fmt.Printf("Failed to import seed type %s: %s", seedType, err.Error())
 		}
 	}
 }
 
-func ArrayCombine(keys []string, values []string) (map[string]string, error) {
-	data := make(map[string]string)
-	if len(keys) != len(values) {
-		return nil, fmt.Errorf("row does not have the same number of values as the header row")
-	}
-	for i := range len(keys) {
-		header := keys[i]
-		value := values[i]
-		data[header] = value
-	}
-	return data, nil
-}
-
-func importSeedType(seedType string) error {
+func importSeedType(seedType string, db *gorm.DB) error {
 	path := "seed_data/" + seedType + ".csv"
+	cache := query_cache.NewCache()
 	file, err := getSeedReader(path)
 	if err != nil {
 		return err
@@ -44,17 +43,27 @@ func importSeedType(seedType string) error {
 	defer func() {
 		fmt.Printf("Inserted %d records total\r\n", total)
 	}()
-
 	//stream the file into a map of strings and strings
 	return importer.StreamHeaderAwareImport[map[string]string](
 		file,
 		func(header []string, record []string) (map[string]string, error) {
-			return ArrayCombine(header, record)
+			return importer.ArrayCombine(header, record)
 		},
 		10,
 		func(batch []map[string]string) error {
 			total += len(batch)
-			fmt.Printf("Inserting %d listings!\r\n", len(batch))
+			insertBatch := make([]domain.Listing, 0, len(batch))
+
+			for _, item := range batch {
+				listing, err := CreateListingRecord(item, cache, db)
+				if err != nil {
+					return fmt.Errorf("failed to create listing: %w", err)
+				}
+				insertBatch = append(insertBatch, listing)
+			}
+			if res := db.CreateInBatches(insertBatch, 10); res.Error != nil {
+				return fmt.Errorf("failed to insert listing batch: %w", res.Error)
+			}
 			return nil
 		},
 	)

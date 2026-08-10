@@ -1,8 +1,8 @@
 -- +goose Up
 CREATE TABLE property_types
 (
-    id   uuid primary key unique default uuidv7(),
-    name text unique
+    id   uuid primary key default uuidv7(),
+    name text not null unique
 );
 
 insert into property_types (name)

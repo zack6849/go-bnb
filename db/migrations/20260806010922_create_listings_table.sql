@@ -1,12 +1,12 @@
 -- +goose Up
 CREATE TABLE listings
 (
-    id               uuid unique primary key         default uuidv7(),
+    id               uuid not null unique primary key         default uuidv7(),
     -- Hide the main id since it exposes creation time
     -- just create another public uuid column with a v4 ID that doesn't have timestamp data
-    public_id        uuid unique                     default uuidv4(),
-    property_type_id uuid references property_types (id),
-    room_type_id     uuid references room_types (id),
+    public_id        uuid not null unique                     default uuidv4(),
+    property_type_id uuid not null references property_types (id),
+    room_type_id     uuid not null references room_types (id),
     airbnb_id        bigint                 null     default null,
     num_beds         int                    not null default 0,
     num_baths        float                  not null default 0,

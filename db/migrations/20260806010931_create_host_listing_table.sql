@@ -1,8 +1,8 @@
 -- +goose Up
 create table host_listing
 (
-    listing_id uuid references listings (id),
-    host_id uuid references hosts (id)
+    listing_id uuid not null references listings (id),
+    host_id uuid not null references hosts (id)
 );
 
 CREATE INDEX idx_host_listing_listing_id ON host_listing (listing_id);

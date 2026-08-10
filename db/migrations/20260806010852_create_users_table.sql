@@ -2,7 +2,7 @@
 CREATE TABLE users
 (
     id            uuid primary key unique default uuidv7(),
-    email         text unique,
+    email         text not null unique,
     password_hash text
 );
 

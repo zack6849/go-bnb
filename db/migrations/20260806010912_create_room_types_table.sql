@@ -1,8 +1,8 @@
 -- +goose Up
 CREATE TABLE room_types
 (
-    id   uuid primary key unique default uuidv7(),
-    name text unique
+    id   uuid not null primary key unique default uuidv7(),
+    name text not null unique
 );
 
 insert into room_types (name)
