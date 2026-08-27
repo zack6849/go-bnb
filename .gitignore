@@ -3,4 +3,4 @@ seed_data/**/*.csv.gz
 seed_data/**/*.geojson
 .idea/
 .env
-node_modules/
+node_modules/seed_data/listings.csv
