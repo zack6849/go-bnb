@@ -1,3 +1,6 @@
-.seed_data/*.csv
+seed_data/**/*.csv
+seed_data/**/*.csv.gz
+seed_data/**/*.geojson
 .idea/
 .env
+node_modules/
