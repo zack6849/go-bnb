@@ -50,3 +50,14 @@ func (c *Configuration) GetConnectionString() string {
 func (c *Configuration) Open() (*gorm.DB, error) {
 	return gorm.Open(postgres.Open(c.GetConnectionString()), &gorm.Config{})
 }
+
+func (c *Configuration) OpenWithConfig(config *gorm.Config) (*gorm.DB, error) {
+	return gorm.Open(postgres.Open(c.GetConnectionString()), config)
+}
+
+func (c *Configuration) DryRun() (*gorm.DB, error) {
+	return c.OpenWithConfig(&gorm.Config{
+		DryRun:               true,
+		DisableAutomaticPing: true,
+	})
+}
