@@ -56,8 +56,12 @@ func (c *Configuration) OpenWithConfig(config *gorm.Config) (*gorm.DB, error) {
 }
 
 func (c *Configuration) DryRun() (*gorm.DB, error) {
-	return c.OpenWithConfig(&gorm.Config{
+	config, err := c.OpenWithConfig(&gorm.Config{
 		DryRun:               true,
 		DisableAutomaticPing: true,
 	})
+	if err != nil {
+		return nil, err
+	}
+	return config.Session(&gorm.Session{DryRun: true}), nil
 }
