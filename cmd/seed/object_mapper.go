@@ -3,7 +3,7 @@ package main
 import (
 	"GoBNB/internal/convert"
 	"GoBNB/internal/domain"
-	"GoBNB/internal/errorcollector"
+	"GoBNB/internal/errs"
 	"GoBNB/internal/query_cache"
 	"encoding/json"
 	"fmt"
@@ -15,69 +15,93 @@ import (
 
 type KeyValueRecord = map[string]string
 
+func ParseListingRecord(record KeyValueRecord) (domain.Listing, error) {
+	chamber := errs.CreateEchoChamber()
+	latFloat := chamber.ConvertValue(record, "latitude", convert.Float(64))
+	lngFloat := chamber.ConvertValue(record, "longitude", convert.Float(64))
+	airBnbId := chamber.ConvertValue(record, "id", strconv.Atoi)
+	accommodates := chamber.ConvertValue(record, "accommodates", strconv.Atoi)
+	//these are blank for some listings; fall back to the schema's own DEFAULTs
+	numBeds := chamber.ConvertFieldOrZeroValue(record, "beds", strconv.Atoi)
+	minNights := chamber.ConvertFieldOrDefaultValue(record, "minimum_nights", 1, strconv.Atoi)
+	maxNights := chamber.ConvertFieldOrDefaultValue(record, "maximum_nights", 7, strconv.Atoi)
+	//baths are optional and can be a float, eg: 1.5
+	numBaths := chamber.ConvertFieldOrZeroValue(record, "bathrooms", convert.Float(32))
+	host, err := ParseHostInformation(record)
+	if err != nil {
+		chamber.PushError(fmt.Errorf("failed to parse host information: %w", err))
+	}
+	hosts := []domain.Host{
+		host,
+	}
+	//then create listing amenities records for it
+	//these all resolve to real rows, so a swallowed error here becomes a
+	//zero-value struct with a zero PK and fails much later at insert time.
+	return domain.Listing{
+		PropertyType: domain.PropertyType{
+			Name: record["property_type"],
+		},
+		RoomType: domain.RoomType{
+			Name: record["room_type"],
+		},
+		AirbnbID:       airBnbId,
+		Accommodates:   accommodates,
+		NumBaths:       float32(numBaths),
+		NumBeds:        numBeds,
+		ListingUrl:     record["listing_url"],
+		Tagline:        record["tagline"],
+		Description:    record["description"],
+		MinNights:      minNights,
+		MaxNights:      maxNights,
+		Location:       domain.GetLocation(latFloat, lngFloat),
+		DistanceMeters: 0,
+		Hosts:          hosts,
+		Amenities:      nil,
+	}, chamber.Summary()
+}
+
+func ParseHostInformation(record KeyValueRecord) (domain.Host, error) {
+
+	hostProfileId, err := convert.Int(10, 64)(record["host_profile_id"])
+	if err != nil {
+		return domain.Host{}, fmt.Errorf("failed to parse host information, profile ID cannot be parsed: %w", err)
+	}
+	hostSince, err := parseHostSince(record)
+	if err != nil {
+		return domain.Host{}, fmt.Errorf("failed to parse host-since information: %w", err)
+	}
+
+	return domain.Host{
+		Name:        record["host_name"],
+		Description: record["host_about"],
+		Superhost:   ParseAirBNBBool(record["host_is_superhost"]),
+		Location:    record["host_location"], //this is just a string, eg: NYC, not a literal lat & lng location
+		ProfileID:   hostProfileId,
+		HostSince:   hostSince,
+	}, nil
+}
+
 func CreateListingRecord(
 	record KeyValueRecord,
 	c *query_cache.CacheStore,
 	db *gorm.DB,
 ) (domain.Listing, error) {
-	ec := errorcollector.NewCollector()
-	latFloat := errorcollector.Field(ec, record, "latitude", convert.Float(64))
-	lngFloat := errorcollector.Field(ec, record, "longitude", convert.Float(64))
-	airBnbId := errorcollector.Field(ec, record, "id", strconv.Atoi)
-	accommodates := errorcollector.Field(ec, record, "accommodates", strconv.Atoi)
-	hostProfileId := errorcollector.Field(ec, record, "host_profile_id", convert.Int(10, 64))
-	//these are blank for some listings; fall back to the schema's own DEFAULTs
-	numBeds := errorcollector.OptionalField(ec, record, "beds", strconv.Atoi)
-	minNights := errorcollector.FieldOr(ec, record, "minimum_nights", 1, strconv.Atoi)
-	maxNights := errorcollector.FieldOr(ec, record, "maximum_nights", 7, strconv.Atoi)
-	//baths are optional and can be a float, eg: 1.5
-	numBaths := errorcollector.OptionalField(ec, record, "bathrooms", convert.Float(32))
-	if ec.HasErrors() {
-		return domain.Listing{}, ec.Summary()
-	}
-	//then create listing amenities records for it
-	//these all resolve to real rows, so a swallowed error here becomes a
-	//zero-value struct with a zero PK and fails much later at insert time.
+	eb := errs.CreateEchoChamber()
+	listing, err := ParseListingRecord(record)
+	eb.PushError(err)
 	amenities, err := ParseAmenities(record, c, db)
-	if err != nil {
-		return domain.Listing{}, err
-	}
-	propertyType, err := GetPropertyTypeByName(c, db, record["property_type"])
-	if err != nil {
-		return domain.Listing{},
-			fmt.Errorf("failed to resolve property type %q: %w", record["property_type"], err)
-	}
-	roomType, err := GetRoomTypeByName(c, db, record["room_type"])
-	if err != nil {
-		return domain.Listing{},
-			fmt.Errorf("failed to resolve room type %q: %w", record["room_type"], err)
-	}
-	host, err := GetHostForListing(c, db, hostProfileId, record)
-	if err != nil {
-		return domain.Listing{},
-			fmt.Errorf("failed to resolve host %d: %w", hostProfileId, err)
-	}
-
-	location := domain.GetLocation(latFloat, lngFloat)
-
-	listing := domain.Listing{
-		PropertyType: propertyType,
-		RoomType:     roomType,
-		Amenities:    amenities,
-		AirbnbID:     airBnbId,
-		NumBaths:     float32(numBaths),
-		NumBeds:      numBeds,
-		ListingUrl:   record["listing_url"],
-		Tagline:      record["name"],
-		Description:  record["description"],
-		Accommodates: accommodates,
-		MinNights:    minNights,
-		MaxNights:    maxNights,
-		Location:     location,
-		Hosts:        []domain.Host{host},
-	}
-
-	return listing, nil
+	eb.PushError(err)
+	listing.Amenities = amenities
+	propertyType, err := ResolvePropertyType(c, db, listing.PropertyType.Name)
+	eb.PushError(err)
+	listing.PropertyType = propertyType
+	roomType, err := ResolveRoomType(c, db, listing.RoomType.Name)
+	eb.PushError(err)
+	listing.RoomType = roomType
+	host, err := ResolveHostByProfileId(c, db, listing.Hosts[0].ProfileID, record)
+	eb.PushError(err)
+	listing.Hosts[0] = host
+	return listing, eb.Summary()
 }
 
 func ParseAmenities(
@@ -107,7 +131,7 @@ func GetRecordByFieldValue[T any](
 	value any,
 	attrs ...any,
 ) (T, error) {
-	return query_cache.GetItemByFieldValue[T](c, field, value, func() (T, error) {
+	return c.GetItemByFieldValue[T](field, value, func() (T, error) {
 		var result T
 		q := db.Where(map[string]any{field: value})
 		if len(attrs) > 0 {
@@ -118,9 +142,9 @@ func GetRecordByFieldValue[T any](
 			var zero T
 			return zero, res.Error
 		}
-		if res.RowsAffected == 1 {
-			fmt.Printf("Created new %T: %v\n", result, value)
-		}
+		//if res.RowsAffected == 1 {
+		//log.Printf("Created new %T: %v\n", result, value)
+		//}
 		return result, nil
 	}, true)
 }
@@ -141,7 +165,7 @@ func GetAmenityByName(
 	return GetListItemByName[domain.Amenity](c, db, name)
 }
 
-func GetPropertyTypeByName(
+func ResolvePropertyType(
 	c *query_cache.CacheStore,
 	db *gorm.DB,
 	name string,
@@ -149,7 +173,7 @@ func GetPropertyTypeByName(
 	return GetListItemByName[domain.PropertyType](c, db, name)
 }
 
-func GetRoomTypeByName(
+func ResolveRoomType(
 	c *query_cache.CacheStore,
 	db *gorm.DB,
 	name string,
@@ -166,7 +190,7 @@ func GetHostByProfileId(
 	return GetRecordByFieldValue[domain.Host](c, db, "profile_id", profileId, values)
 }
 
-func GetHostForListing(
+func ResolveHostByProfileId(
 	c *query_cache.CacheStore,
 	db *gorm.DB,
 	profileId int64,
@@ -190,11 +214,11 @@ func parseHostSince(
 	record KeyValueRecord,
 ) (time.Time, error) {
 	//we only get a relative offset roughly in the dataset
-	ec := errorcollector.NewCollector()
-	hostMonths := errorcollector.Field(ec, record, "hosts_time_as_host_months", strconv.Atoi)
-	hostYears := errorcollector.Field(ec, record, "hosts_time_as_host_years", strconv.Atoi)
-	if ec.HasErrors() {
-		return time.Time{}, ec.Summary()
+	errorBag := errs.CreateEchoChamber()
+	hostMonths := errorBag.ConvertValue(record, "hosts_time_as_host_months", strconv.Atoi)
+	hostYears := errorBag.ConvertValue(record, "hosts_time_as_host_years", strconv.Atoi)
+	if errorBag.HasErrors() {
+		return time.Time{}, errorBag.Summary()
 	}
 	scrapedAt := record["last_scraped"]
 	relativeTo, err := time.Parse("2006-01-02", scrapedAt)

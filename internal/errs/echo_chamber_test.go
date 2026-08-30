@@ -1,4 +1,4 @@
-package errorcollector
+package errs
 
 import (
 	"errors"
@@ -7,6 +7,8 @@ import (
 	"testing"
 
 	"GoBNB/internal/convert"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestCollectsEveryFailureNotJustTheFirst(t *testing.T) {
@@ -16,10 +18,15 @@ func TestCollectsEveryFailureNotJustTheFirst(t *testing.T) {
 		//"absent" is deliberately not here
 	}
 
-	ec := NewCollector()
-	good := Field(ec, record, "good", strconv.Atoi)
-	bad := Field(ec, record, "bad", strconv.Atoi)
-	absent := Field(ec, record, "absent", strconv.Atoi)
+	ec := CreateEchoChamber()
+	good := ec.ConvertValue(record, "good", strconv.Atoi)
+	bad := ec.ConvertValue(record, "bad", strconv.Atoi)
+	absent := ec.ConvertValue(record, "absent", strconv.Atoi)
+
+	assert.Equal(t, 42, good)
+	assert.Equal(t, 0, bad)
+	//should have 2 errors, bad & absent
+	assert.Equal(t, 2, len(ec.errs))
 
 	if good != 42 {
 		t.Errorf("good = %d, want 42", good)
@@ -44,11 +51,11 @@ func TestCollectsEveryFailureNotJustTheFirst(t *testing.T) {
 }
 
 func TestSummaryIsNilWhenClean(t *testing.T) {
-	ec := NewCollector()
-	if v := Field(ec, map[string]string{"n": "7"}, "n", strconv.Atoi); v != 7 {
+	ec := CreateEchoChamber()
+	if v := ec.ConvertValue(map[string]string{"n": "7"}, "n", strconv.Atoi); v != 7 {
 		t.Errorf("v = %d, want 7", v)
 	}
-	if ec.HasErrors() {
+	if !ec.Empty() {
 		t.Error("HasErrors on a clean collector")
 	}
 	if ec.Summary() != nil {
@@ -59,8 +66,8 @@ func TestSummaryIsNilWhenClean(t *testing.T) {
 // Summary must wrap rather than flatten, so callers can still match on
 // sentinel errors -- this is what fmt.Errorf on a concatenated string loses.
 func TestSummaryPreservesUnwrapping(t *testing.T) {
-	ec := NewCollector()
-	Field(ec, map[string]string{"n": "xyz"}, "n", strconv.Atoi)
+	ec := CreateEchoChamber()
+	ec.ConvertValue(map[string]string{"n": "xyz"}, "n", strconv.Atoi)
 	if !errors.Is(ec.Summary(), strconv.ErrSyntax) {
 		t.Error("Summary lost the underlying strconv.ErrSyntax")
 	}
@@ -68,7 +75,7 @@ func TestSummaryPreservesUnwrapping(t *testing.T) {
 
 // A message containing a % verb must survive verbatim.
 func TestSummaryDoesNotReinterpretFormatVerbs(t *testing.T) {
-	ec := NewCollector()
+	ec := CreateEchoChamber()
 	ec.PushError(errors.New("occupancy hit 100%d of capacity"))
 	if got := ec.Summary().Error(); !strings.Contains(got, "100%d") {
 		t.Errorf("Summary mangled a %% in the message: %s", got)
@@ -76,37 +83,32 @@ func TestSummaryDoesNotReinterpretFormatVerbs(t *testing.T) {
 }
 
 func TestOptionalFieldToleratesMissingAndEmpty(t *testing.T) {
-	ec := NewCollector()
+	ec := CreateEchoChamber()
 	record := map[string]string{"empty": "", "bad": "1.5.9"}
 
-	if v := OptionalField(ec, record, "gone", convert.Float(64)); v != 0 {
+	if v := ec.ConvertFieldOrZeroValue(record, "gone", convert.Float(64)); v != 0 {
 		t.Errorf("missing = %v, want 0", v)
 	}
-	if v := OptionalField(ec, record, "empty", convert.Float(64)); v != 0 {
+	if v := ec.ConvertFieldOrZeroValue(record, "empty", convert.Float(64)); v != 0 {
 		t.Errorf("empty = %v, want 0", v)
 	}
-	if ec.HasErrors() {
+	if !ec.Empty() {
 		t.Fatalf("missing/empty optionals should not error, got: %v", ec.Summary())
 	}
 	// Present but malformed is still a real error.
-	OptionalField(ec, record, "bad", convert.Float(64))
+	ec.ConvertFieldOrZeroValue(record, "bad", convert.Float(64))
 	if !ec.HasErrors() {
 		t.Error("a present-but-malformed optional should be reported")
 	}
 }
 
 func TestCollectHandlesArbitraryShapes(t *testing.T) {
-	ec := NewCollector()
-	ok := Collect(ec, func() (string, error) { return "value", nil })
-	bad := Collect(ec, func() (string, error) { return "ignored", errors.New("boom") })
+	ec := CreateEchoChamber()
+	ok := ec.Collect(func() (string, error) { return "value", nil })
+	bad := ec.Collect(func() (string, error) { return "ignored", errors.New("boom") })
 
-	if ok != "value" {
-		t.Errorf("ok = %q, want %q", ok, "value")
-	}
-	if bad != "" {
-		t.Errorf("bad = %q, want zero value", bad)
-	}
-	if n := len(ec.Errors()); n != 1 {
-		t.Errorf("collected %d errors, want 1", n)
-	}
+	assert.Equal(t, "value", ok)
+	assert.Equal(t, "", bad)
+	assert.Equal(t, 1, len(ec.errs))
+	assert.ErrorContains(t, ec.Summary(), "boom")
 }

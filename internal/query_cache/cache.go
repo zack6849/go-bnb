@@ -14,22 +14,21 @@ type CacheStore struct {
 	cache map[string]any
 }
 
-func GetItemByFieldValue[T any](
-	c *CacheStore,
+func (cacheStore *CacheStore) GetItemByFieldValue[T any](
 	field string,
 	value any,
 	resolve func() (T, error),
-	cachable bool,
+	cache bool,
 ) (T, error) {
 	var zero T
 	typeKey := reflect.TypeFor[T]().String()
 	cacheKey := fmt.Sprintf("%s:%s:%s", typeKey, field, value)
-	val, err, _ := c.wg.Do(cacheKey, func() (any, error) {
-		if cachable {
-			c.mu.RLock()
-			v, hit := c.cache[cacheKey]
+	val, err, _ := cacheStore.wg.Do(cacheKey, func() (any, error) {
+		if cache {
+			cacheStore.mu.RLock()
+			v, hit := cacheStore.cache[cacheKey]
 			//always release the read lock, whether hit or miss
-			c.mu.RUnlock()
+			cacheStore.mu.RUnlock()
 			if hit {
 				typed, ok := v.(T)
 				if !ok {
@@ -46,12 +45,12 @@ func GetItemByFieldValue[T any](
 			//if there's an error, bail, don't cache it.
 			return nil, err
 		}
-		if cachable {
+		if cache {
 			//write lock the cache, we're about to add to it
-			c.mu.Lock()
+			cacheStore.mu.Lock()
 			//ensure we unlock it
-			defer c.mu.Unlock()
-			c.cache[cacheKey] = obj
+			defer cacheStore.mu.Unlock()
+			cacheStore.cache[cacheKey] = obj
 		}
 		return obj, nil
 	})

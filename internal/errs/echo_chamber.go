@@ -1,46 +1,46 @@
-package errorcollector
+package errs
 
 import (
 	"errors"
 	"fmt"
 )
 
-// ErrorCollector accumulates errors so a caller can run a batch of fallible
+// EchoChamber accumulates errors so a caller can run a batch of fallible
 // operations and report everything that went wrong at once, rather than
 // bailing on the first failure.
 //
 // The zero value is ready to use.
-type ErrorCollector struct {
+type EchoChamber struct {
 	errs []error
 }
 
-func NewCollector() *ErrorCollector {
-	return &ErrorCollector{}
+func CreateEchoChamber() *EchoChamber {
+	return &EchoChamber{}
 }
 
 // PushError records err, err can be nil
-func (ec *ErrorCollector) PushError(err error) {
+func (ec *EchoChamber) PushError(err error) {
 	if err != nil {
 		ec.errs = append(ec.errs, err)
 	}
 }
 
 // PushErrorf records a formatted error
-func (ec *ErrorCollector) PushErrorf(format string, args ...any) {
+func (ec *EchoChamber) PushErrorf(format string, args ...any) {
 	ec.errs = append(ec.errs, fmt.Errorf(format, args...))
 }
 
-func (ec *ErrorCollector) HasErrors() bool {
-	return len(ec.errs) > 0
-}
+func (ec *EchoChamber) Empty() bool { return len(ec.errs) == 0 }
+
+func (ec *EchoChamber) HasErrors() bool { return !ec.Empty() }
 
 // Errors are the individual errors collected
-func (ec *ErrorCollector) Errors() []error {
+func (ec *EchoChamber) Errors() []error {
 	return ec.errs
 }
 
 // Summary returns every collected error as one error, or nil if none were collected.
-func (ec *ErrorCollector) Summary() error {
+func (ec *EchoChamber) Summary() error {
 	return errors.Join(ec.errs...)
 }
 
@@ -50,9 +50,7 @@ func (ec *ErrorCollector) Summary() error {
 
 // Collect runs fn recording any error and returning the zero value on fail
 // general purpose for anything shaped (T, error)
-// can't be a method because methods can't be typed until 1.27+ I think
-func Collect[T any](
-	ec *ErrorCollector,
+func (ec *EchoChamber) Collect[T any](
 	fn func() (T, error),
 ) T {
 	v, err := fn()
@@ -64,11 +62,10 @@ func Collect[T any](
 	return v
 }
 
-// Field looks up field in record and converts it, recording error on failure.
+// ConvertValue looks up the field in the record and converts it, recording an error on failure.
 // The field name is reused for both the lookup and the error message.
 // A missing key is reported distinctly from an unparseable value
-func Field[T any](
-	ec *ErrorCollector,
+func (ec *EchoChamber) ConvertValue[T any](
 	record map[string]string,
 	field string,
 	convert func(string) (T, error),
@@ -87,10 +84,9 @@ func Field[T any](
 	return v
 }
 
-// FieldOr behaves like Field, but a missing or empty value yields fallback instead of an error.
+// ConvertFieldOrDefaultValue behaves like ConvertValue, but a missing or empty value yields fallback instead of an error.
 // Only a value that is present and malformed is reported.
-func FieldOr[T any](
-	ec *ErrorCollector,
+func (ec *EchoChamber) ConvertFieldOrDefaultValue[T any](
 	record map[string]string,
 	field string,
 	fallback T,
@@ -109,13 +105,12 @@ func FieldOr[T any](
 	return v
 }
 
-// OptionalField is FieldOr with the zero value as the fallback.
-func OptionalField[T any](
-	ec *ErrorCollector,
+// ConvertFieldOrZeroValue is ConvertFieldOrDefaultValue with the zero value as the fallback.
+func (ec *EchoChamber) ConvertFieldOrZeroValue[T any](
 	record map[string]string,
 	field string,
 	convert func(string) (T, error),
 ) T {
 	var zero T
-	return FieldOr(ec, record, field, zero, convert)
+	return ec.ConvertFieldOrDefaultValue(record, field, zero, convert)
 }
