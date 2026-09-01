@@ -11,7 +11,7 @@ import (
 
 func GetRequestsFromParams(c *gin.Context) (SearchParameters, error) {
 	var zero SearchParameters
-	maxDistance := 30
+	maxDistance := 30_000 //30km
 	distParam, ok := c.GetQuery("distance")
 	if ok {
 		parsed, err := strconv.Atoi(distParam)

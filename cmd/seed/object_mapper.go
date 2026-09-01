@@ -49,7 +49,7 @@ func ParseListingRecord(record KeyValueRecord) (domain.Listing, error) {
 		NumBaths:       float32(numBaths),
 		NumBeds:        numBeds,
 		ListingUrl:     record["listing_url"],
-		Tagline:        record["tagline"],
+		Tagline:        record["name"],
 		Description:    record["description"],
 		MinNights:      minNights,
 		MaxNights:      maxNights,

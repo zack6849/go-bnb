@@ -118,6 +118,7 @@ func TestParsesListingCorrectly(t *testing.T) {
 	assert.Equal(t, 1125, listing.MaxNights)
 	assert.Equal(t, record["listing_url"], listing.ListingUrl)
 	assert.Equal(t, record["description"], listing.Description)
+	assert.Equal(t, record["name"], listing.Tagline)
 	assert.Equal(t, 42.65726, listing.Location.Latitude)
 	assert.Equal(t, -73.78219, listing.Location.Longitude)
 	assert.Len(t, listing.Hosts, 1)

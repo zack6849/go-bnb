@@ -31,15 +31,15 @@ func SendRequest(values url.Values) (SearchParameters, error) {
 }
 
 const ListingApiUrl = "/api/listings"
-const SearchLat = -73.7782
-const SearchLng = 42.6657
-const SearchDistance = 50
+const SearchLng = -73.7782
+const SearchLat = 42.6657
+const SearchDistanceMeters = 30_000 //30km
 
 func GetDefaultRequestParams() url.Values {
 	v := url.Values{}
 	v.Set("latitude", fmt.Sprintf("%f", SearchLat))
 	v.Set("longitude", fmt.Sprintf("%f", SearchLng))
-	v.Set("distance", fmt.Sprintf("%d", SearchDistance))
+	v.Set("distance", fmt.Sprintf("%d", SearchDistanceMeters))
 	return v
 }
 
@@ -47,7 +47,7 @@ func TestConvertsQueryParametersToSearchParameters(t *testing.T) {
 	v := GetDefaultRequestParams()
 	params, err := SendRequest(v)
 	assert.Equal(t, err, nil)
-	assert.Equal(t, params.MaxDistance, SearchDistance)
+	assert.Equal(t, params.MaxDistance, SearchDistanceMeters)
 	assert.InDelta(t, params.SearchNear.Latitude, SearchLat, 1)
 	assert.InDelta(t, params.SearchNear.Longitude, SearchLng, 1)
 }

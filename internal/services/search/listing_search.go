@@ -26,13 +26,13 @@ func FindMatchingListings(params dto.SearchParameters) ([]domain.Listing, error)
 func GetListingQuery(db *gorm.DB, params dto.SearchParameters) *gorm.DB {
 	return db.Model(&domain.Listing{}).
 		Select("listings.*, st_distance(location, st_makepoint(?, ?)) as distance_meters",
-			params.SearchNear.Latitude,
 			params.SearchNear.Longitude,
+			params.SearchNear.Latitude,
 		).
 		Preload(clause.Associations).
 		Where("st_dwithin(location,st_makepoint(?, ?), ?)",
-			params.SearchNear.Latitude,
 			params.SearchNear.Longitude,
+			params.SearchNear.Latitude,
 			params.MaxDistance,
 		)
 }
