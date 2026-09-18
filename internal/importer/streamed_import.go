@@ -12,6 +12,8 @@ import (
 	"io"
 )
 
+type KeyValueRecord = map[string]string
+
 // InsertFunc generic insert function that receives an array of T and returns an error if one is thrown
 type InsertFunc[T any] func(batch []T) error
 
@@ -103,7 +105,7 @@ func readBatch[T any](
 	return batch, true, nil
 }
 
-func ArrayCombine(keys []string, values []string) (map[string]string, error) {
+func ArrayCombine(keys []string, values []string) (KeyValueRecord, error) {
 	data := make(map[string]string)
 	if len(keys) != len(values) {
 		return nil, fmt.Errorf("row does not have the same number of values as the header row")

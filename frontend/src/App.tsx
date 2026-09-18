@@ -2,7 +2,7 @@
 import {HeaderConfig} from "@/config/header.ts";
 import Navbar from "@/components/ui/navbar"
 import Footer from "@/components/ui/footer.tsx";
-import ListingSearch from "@/components/ListingSearch.tsx";
+import ListingSearch from "@/components/listings/ListingSearch.tsx";
 
 export function App() {
     return (

@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"GoBNB/internal/convert"
+	"gobnb/internal/convert"
 
 	"github.com/stretchr/testify/assert"
 )

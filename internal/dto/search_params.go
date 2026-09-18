@@ -1,9 +1,9 @@
 package dto
 
 import (
-	"GoBNB/internal/domain"
 	"errors"
 	"fmt"
+	"gobnb/internal/domain"
 	"strconv"
 
 	"github.com/gin-gonic/gin"

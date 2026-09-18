@@ -1,11 +1,11 @@
 package search
 
 import (
-	"GoBNB/internal/configuration"
-	"GoBNB/internal/db_assertions"
-	"GoBNB/internal/domain"
-	"GoBNB/internal/dto"
 	"fmt"
+	"gobnb/internal/configuration"
+	"gobnb/internal/db_assertions"
+	"gobnb/internal/domain"
+	"gobnb/internal/dto"
 	"testing"
 )
 

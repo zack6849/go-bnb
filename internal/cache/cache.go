@@ -1,4 +1,4 @@
-package query_cache
+package cache
 
 import (
 	"fmt"

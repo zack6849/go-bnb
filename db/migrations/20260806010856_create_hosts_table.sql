@@ -5,6 +5,7 @@ CREATE TABLE hosts
     user_id     uuid references users(id),
     name        text not null,
     description text not null,
+    picture_url text not null,
     superhost   boolean not null default false,
     slug        text not null unique,
     profile_id  bigint not null unique,

@@ -1,9 +1,9 @@
 package search
 
 import (
-	"GoBNB/internal/configuration"
-	"GoBNB/internal/domain"
-	"GoBNB/internal/dto"
+	"gobnb/internal/configuration"
+	"gobnb/internal/domain"
+	"gobnb/internal/dto"
 
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"

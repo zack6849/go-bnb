@@ -1,10 +1,10 @@
 package main
 
 import (
-	"GoBNB/internal/bootstrap"
-	"GoBNB/internal/configuration"
-	"GoBNB/internal/dto"
-	"GoBNB/internal/services/search"
+	"gobnb/internal/bootstrap"
+	"gobnb/internal/configuration"
+	"gobnb/internal/dto"
+	"gobnb/internal/services/search"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -17,6 +17,11 @@ func setupRouter() *gin.Engine {
 
 func addListingsRoute(router *gin.Engine) *gin.Engine {
 	router.GET("/api/listings", FetchListings)
+	return router
+}
+
+func addGeocodingRoute(router *gin.Engine) *gin.Engine {
+	router.GET("/api/cities/search", SearchCities)
 	return router
 }
 
@@ -54,4 +59,12 @@ func FetchListings(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"listings": relatedListings,
 	})
+}
+
+// search cities takes a substring, eg: ?search=Al and returns a list of cities matching the substring
+// should return an array of cities with a lat and lng and their name
+// should also defer to the geoapify API when we don't have a cached copy of a city with that match
+// and should create new records as we go, cities don't move :)
+func SearchCities(c *gin.Context) {
+
 }

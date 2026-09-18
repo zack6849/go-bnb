@@ -1,8 +1,8 @@
 package bootstrap
 
 import (
-	"GoBNB/internal/configuration"
 	"context"
+	"gobnb/internal/configuration"
 )
 
 func Initialize() context.Context {

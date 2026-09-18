@@ -106,7 +106,7 @@ func GetExampleRecord() (record KeyValueRecord) {
 
 func TestParsesListingCorrectly(t *testing.T) {
 	record := GetExampleRecord()
-	listing, err := ParseListingRecord(record)
+	listing, err := ExtractListingFromRecord(record)
 	require.NoError(t, err)
 	assert.Equal(t, listing.PropertyType.Name, record["property_type"])
 	assert.Equal(t, listing.RoomType.Name, record["room_type"])
@@ -116,7 +116,7 @@ func TestParsesListingCorrectly(t *testing.T) {
 	assert.Equal(t, 1, listing.NumBeds)
 	assert.Equal(t, 18, listing.MinNights)
 	assert.Equal(t, 1125, listing.MaxNights)
-	assert.Equal(t, record["listing_url"], listing.ListingUrl)
+	assert.Equal(t, record["listing_url"], listing.ListingURL)
 	assert.Equal(t, record["description"], listing.Description)
 	assert.Equal(t, record["name"], listing.Tagline)
 	assert.Equal(t, 42.65726, listing.Location.Latitude)
@@ -132,7 +132,7 @@ func TestParsesListingRecordFallsBackToDefaultsWhenFieldsAreMissing(t *testing.T
 	delete(record, "maximum_nights")
 	delete(record, "bathrooms")
 
-	listing, err := ParseListingRecord(record)
+	listing, err := ExtractListingFromRecord(record)
 	if err != nil {
 		t.Fail()
 		return
@@ -145,7 +145,7 @@ func TestParsesListingRecordFallsBackToDefaultsWhenFieldsAreMissing(t *testing.T
 
 func TestParseHostInformation(t *testing.T) {
 	record := GetExampleRecord()
-	host, err := ParseHostInformation(record)
+	host, err := ExtractHostFromRecord(record)
 	if err != nil {
 		t.Fail()
 		return
@@ -153,7 +153,7 @@ func TestParseHostInformation(t *testing.T) {
 	assert.Equal(t, record["host_name"], host.Name)
 	assert.Equal(t, record["host_about"], host.Description)
 	assert.Equal(t, record["host_location"], host.Location)
-	assert.Equal(t, false, host.Superhost)
+	assert.Equal(t, false, host.SuperHost)
 	assert.Equal(t, int64(1462672002391360660), host.ProfileID)
 	assert.Equal(t, time.Date(2016, time.April, 16, 0, 0, 0, 0, time.UTC), host.HostSince)
 }
@@ -162,7 +162,7 @@ func TestParseHostInformationErrorsOnUnparseableProfileId(t *testing.T) {
 	record := GetExampleRecord()
 	record["host_profile_id"] = "not-a-number"
 
-	_, err := ParseHostInformation(record)
+	_, err := ExtractHostFromRecord(record)
 	assert.Error(t, err)
 }
 
@@ -170,7 +170,7 @@ func TestParseHostInformationErrorsOnUnparseableHostSince(t *testing.T) {
 	record := GetExampleRecord()
 	record["last_scraped"] = "not-a-date"
 
-	_, err := ParseHostInformation(record)
+	_, err := ExtractHostFromRecord(record)
 	assert.Error(t, err)
 }
 

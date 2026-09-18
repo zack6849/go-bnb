@@ -1,94 +1,212 @@
 package main
 
 import (
-	"GoBNB/internal/bootstrap"
-	"GoBNB/internal/configuration"
-	"GoBNB/internal/domain"
-	"GoBNB/internal/importer"
-	"GoBNB/internal/query_cache"
+	"flag"
 	"fmt"
+	"gobnb/internal/bootstrap"
+	"gobnb/internal/cache"
+	"gobnb/internal/configuration"
+	"gobnb/internal/domain"
+	"gobnb/internal/errs"
+	"gobnb/internal/importer"
+	"io"
 	"io/fs"
+	"log"
 	"os"
+	"time"
 
+	"github.com/mmcloughlin/geohash"
 	"gorm.io/gorm"
 )
 
 func main() {
 	_ = bootstrap.Initialize()
 	configuration.Load()
+	filename := flag.String("file", "listings.csv", "filename to import (relative to seed_data dir)")
+	flag.Parse()
+	handle, err := resolveFileByName(*filename)
+	if err != nil {
+		fmt.Printf("failed to resolve import filename %s: %s", *filename, err.Error())
+	}
+	//make sure we close the file handle
+	defer func(handle *os.File) {
+		err := handle.Close()
+		if err != nil {
+			fmt.Printf("failed to close seed file %s: %s", handle.Name(), err.Error())
+		}
+	}(handle)
 	db, err := configuration.GetDatabaseConfiguration().Open()
+	log.Printf("Seeding started (%s)", handle.Name())
 	if err != nil {
 		fmt.Printf("failed to open db connection: %s", err.Error())
 		return
 	}
-	seedTypes := []string{"listings"}
-	for _, seedType := range seedTypes {
-		err := importSeedType(seedType, db)
-		if err != nil {
-			fmt.Printf("Failed to import seed type %s:\n\t%s", seedType, err.Error())
-		}
+	start := time.Now()
+	log.Println("Resolving dependent records (property types, amenities, etc)")
+	if err := createDependentRecords(handle, db); err != nil {
+		fmt.Printf("failed to create dependent records from file %s: %s", handle.Name(), err.Error())
+		return
+	}
+	log.Println("Importing listings in bulk")
+	if err := importListingRecords(handle, db); err != nil {
+		fmt.Printf("failed to import listing records from file %s: %s\n", handle.Name(), err.Error())
+		return
+	}
+	end := time.Now()
+	elapsed := end.Sub(start).Abs().String()
+	log.Println("import complete. finished in " + elapsed)
+	log.Println("Reverse-geocoding listings to prime cities cache...")
+	if err := reverseGeocodeListings(handle, db); err != nil {
+		fmt.Printf("failed to geocode listing records: %s", err.Error())
+		return
 	}
 }
 
-func importSeedType(
-	seedType string,
-	db *gorm.DB,
-) error {
-	path := "seed_data/" + seedType + ".csv"
-	cache := query_cache.NewCache()
-	file, err := getSeedReader(path)
+func createDependentRecords(file *os.File, db *gorm.DB) error {
+	err := rewindFileHandle(file)
 	if err != nil {
 		return err
 	}
-	//make sure we close this file handle
-	defer func(file *os.File) {
-		err = file.Close()
-		if err != nil {
-			//nothing we can really do, but i guess we should at least tell people
-			fmt.Printf("failed to close file %s: %s", path, err.Error())
-		}
-	}(file)
-	total := 0
-	//print total insert count at the end
-	defer func() {
-		fmt.Printf("Inserted %d records total\r\n", total)
-	}()
-	//stream the file into a map of strings and strings
-	return importer.StreamHeaderAwareImport[map[string]string](
+	const recordChunkSize = 2000
+	c := cache.NewCache()
+	err = importer.StreamHeaderAwareImport[KeyValueRecord](
 		file,
-		func(header []string, record []string) (map[string]string, error) {
+		func(header []string, record []string) (KeyValueRecord, error) {
+			//combine the header with the record
 			return importer.ArrayCombine(header, record)
 		},
-		500, //in-memory limit, how many records to hold in memory per-chunk of work
-		func(batch []map[string]string) error {
-			err := db.Transaction(func(tx *gorm.DB) error {
-				insertBatch := make([]domain.Listing, 0, len(batch))
-				index := total
-				for _, item := range batch {
-					listing, err := CreateListingRecord(item, cache, db)
-					listingId := item["id"]
-					index++
-					if err != nil {
-						return fmt.Errorf("listing#%d (%s) import failed:\n\t\t%w", index, listingId, err)
+		recordChunkSize,
+		func(batch []KeyValueRecord) error {
+			errBag := errs.CreateEchoChamber()
+			err := db.Transaction(func(db *gorm.DB) error {
+				for _, record := range batch {
+					//parse the listing
+					listing, err := ExtractListingFromRecord(record)
+					errBag.PushError(err)
+
+					//resolve the sub-relations
+					roomType, err := resolveRoomType(c, record["room_type"], db)
+					errBag.PushError(err)
+					listing.RoomType = roomType
+
+					propertyType, err := resolvePropertyType(c, record["property_type"], db)
+					listing.PropertyType = propertyType
+					errBag.PushError(err)
+
+					amenityNames, err := ExtractAmenityNamesFromRecord(record)
+					if err == nil {
+						resolvedAmenities := resolveAmenities(c, amenityNames, db)
+						listing.Amenities = resolvedAmenities
 					}
-					insertBatch = append(insertBatch, listing)
+
+					host, err := ExtractHostFromRecord(record)
+					errBag.PushError(err)
+					if err == nil {
+						resolvedHost, err := resolveHost(c, host, db)
+						errBag.PushError(err)
+						listing.Hosts[0] = resolvedHost
+					}
 				}
-				total += len(batch)
-				res := db.CreateInBatches(insertBatch, 500)
-				if res.Error != nil {
-					return fmt.Errorf("failed to insert listing batch: %w", res.Error)
-				}
-				return nil
+				return db.Error
 			})
-			if err != nil {
-				return err
+			errBag.PushError(err)
+			return errBag.Summary()
+		},
+	)
+	return err
+}
+
+func importListingRecords(file *os.File, db *gorm.DB) error {
+	const dbChunkSize = 250
+	const recordChunkSize = 2000
+	err := rewindFileHandle(file)
+	if err != nil {
+		return err
+	}
+	c := cache.NewCache()
+	return importer.StreamHeaderAwareImport[KeyValueRecord](
+		file,
+		func(header []string, record []string) (KeyValueRecord, error) {
+			//combine the header with the record
+			return importer.ArrayCombine(header, record)
+		},
+		recordChunkSize,
+		func(batch []KeyValueRecord) error {
+			var bulk []domain.Listing
+			for _, record := range batch {
+				errBag := errs.CreateEchoChamber()
+				//parse the listing
+				listing, err := ExtractListingFromRecord(record)
+				errBag.PushError(err)
+
+				//resolve the sub-relations
+				roomType, err := resolveRoomType(c, listing.RoomType.Name, db)
+				errBag.PushError(err)
+				listing.RoomType = roomType
+
+				propertyType, err := resolvePropertyType(c, listing.PropertyType.Name, db)
+				listing.PropertyType = propertyType
+				errBag.PushError(err)
+
+				host, err := resolveHost(c, listing.Hosts[0], db)
+				errBag.PushError(err)
+				listing.Hosts[0] = host
+
+				amenityNames, err := ExtractAmenityNamesFromRecord(record)
+				if err == nil {
+					resolvedAmenities := resolveAmenities(c, amenityNames, db)
+					listing.Amenities = resolvedAmenities
+				}
+
+				bulk = append(bulk, listing)
 			}
-			return nil
+			tx := db.Model(domain.Listing{}).CreateInBatches(bulk, dbChunkSize)
+			return tx.Error
 		},
 	)
 }
 
-func getSeedReader(
+// geohash the location to normalize the locations before lookup and prevent a bunch of lookups that are relatively close to each other
+func reverseGeocodeListings(file *os.File, db *gorm.DB) error {
+	//rewind reader pointer to the start of the file
+	_, err := file.Seek(0, 0)
+	if err != nil {
+		return err
+	}
+	geoqueue := make(map[string]bool)
+	err = importer.StreamHeaderAwareImport[KeyValueRecord](
+		file,
+		func(header []string, record []string) (KeyValueRecord, error) {
+			//combine the header with the record
+			return importer.ArrayCombine(header, record)
+		},
+		50,
+		func(batch []KeyValueRecord) error {
+			for _, record := range batch {
+				//parse the listing
+				listing, err := ExtractListingFromRecord(record)
+				if err != nil {
+					return fmt.Errorf("failed to parse listing: %w", err)
+				}
+				locHash := calculateCityHash(listing.Location)
+				geoqueue[locHash] = true
+			}
+			return nil
+		},
+	)
+	if err != nil {
+		return err
+	}
+	log.Printf("Found %d unique geohashes to reverse-geocode", len(geoqueue))
+	for hash := range geoqueue {
+		lat, lng := geohash.Decode(hash)
+		//loc := domain.Location{Latitude: lat, Longitude: lng}
+		fmt.Printf("Reverse-geocoding %f, %f to a city record!\n", lat, lng)
+	}
+	return nil
+}
+
+func getFileHandle(
 	path string,
 ) (*os.File, error) {
 	if fs.ValidPath(path) {
@@ -99,4 +217,15 @@ func getSeedReader(
 		return file, nil
 	}
 	return nil, fmt.Errorf("path %s is not valid", path)
+}
+
+func rewindFileHandle(file *os.File) error {
+	if _, err := file.Seek(0, io.SeekStart); err != nil {
+		return fmt.Errorf("rewind input file: %w", err)
+	}
+	return nil
+}
+
+func calculateCityHash(location domain.Location) string {
+	return geohash.EncodeWithPrecision(location.Latitude, location.Longitude, 5)
 }

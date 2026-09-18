@@ -1,8 +1,8 @@
 package configuration
 
 import (
-	"GoBNB/internal/database"
 	"fmt"
+	"gobnb/internal/database"
 	"log"
 	"os"
 	"strconv"

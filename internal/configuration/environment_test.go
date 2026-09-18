@@ -1,8 +1,8 @@
 package configuration
 
 import (
-	"GoBNB/internal/database"
 	"crypto/rand"
+	"gobnb/internal/database"
 	"math/big"
 	"testing"
 )

@@ -8,9 +8,10 @@ type Host struct {
 	UUIDIdentifier
 	Name        string
 	Description string
-	Superhost   bool
+	SuperHost   bool `gorm:"column:superhost"`
 	Slug        string
 	ProfileID   int64
 	HostSince   time.Time
 	Location    string
+	PictureURL  string `gorm:"column:picture_url"`
 }

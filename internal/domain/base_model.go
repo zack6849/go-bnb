@@ -1,12 +1,14 @@
 package domain
 
-import "github.com/google/uuid"
+import (
+	"github.com/google/uuid"
+)
 
 type DatabaseDrivenList struct {
-	UUIDIdentifier
-	Name string
+	UUIDIdentifier `json:"id"`
+	Name           string `json:"name"`
 }
 
 type UUIDIdentifier struct {
-	ID uuid.UUID `gorm:"primaryKey;default:uuidv7()"`
+	ID uuid.UUID `gorm:"type:uuid;primaryKey;default:uuidv7()"`
 }

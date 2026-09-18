@@ -1,19 +1,22 @@
 package domain
 
-import "github.com/google/uuid"
+import (
+	"github.com/google/uuid"
+)
 
 type Listing struct {
-	UUIDIdentifier `gorm:"default:uuidv7()"`
-	PublicID       uuid.UUID `gorm:"default:uuidv4()"`
-	PropertyTypeID uuid.UUID `gorm:"default;"`
+	UUIDIdentifier
+	PublicID       uuid.UUID `gorm:"type:uuid;default:uuidv4()"`
+	PropertyTypeID uuid.UUID
 	PropertyType   PropertyType
-	RoomTypeID     uuid.UUID `gorm:"default;"`
+	RoomTypeID     uuid.UUID
 	RoomType       RoomType
 	AirbnbID       int
 	Accommodates   int
 	NumBaths       float32 //baths can be half
 	NumBeds        int
-	ListingUrl     string
+	ListingURL     string
+	PictureURL     string
 	Tagline        string
 	Description    string
 	MinNights      int
