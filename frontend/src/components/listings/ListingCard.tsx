@@ -26,9 +26,11 @@ export default function ListingCard(props: Readonly<ListingCardProps>) {
             </CardContent>
             <CardFooter className={"justify-between"}>
                 <CardAction>
-                    <Button>
-                        <a target={"_blank"} href={props.listing.ListingUrl}>View Listing</a>
-                    </Button>
+                    <a target={"_blank"} href={props.listing.ListingURL}>
+                        <Button>
+                            View Listing
+                        </Button>
+                    </a>
                 </CardAction>
             </CardFooter>
         </Card>

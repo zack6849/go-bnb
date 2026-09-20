@@ -1,11 +1,11 @@
 import type {Host} from "@/types/Host.ts";
 
 export interface Listing {
-    AirBNBID: string,
+    AirBnbID: string,
     ID: string,
     Tagline: string,
     Description: string,
-    ListingUrl: string,
+    ListingURL: string,
     NumBeds: number,
     NumBaths: number,
     Hosts: Host[],
