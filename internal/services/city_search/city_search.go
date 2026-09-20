@@ -17,12 +17,13 @@ func FindMatchingCities(params CitySearchParameters, db *gorm.DB, ctx context.Co
 	tx := query.Find(&results)
 	if len(results) == 0 {
 		log.Printf("no results for term %s, fetching from upstream API", params.search)
-		apiCity, err := FetchCityFromApi(params, db, ctx)
+		_, err := FetchCityFromApi(params, db, ctx)
 		if err != nil {
 			return results, fmt.Errorf("no local or remote results for term %s: %w", params.search, err)
 		}
-		//push the newly created entry onto the results
-		results = append(results, apiCity)
+		//re-set the results entirely so we ensure the ordering is correct
+		results = make([]domain.City, 0)
+		query.Find(&results)
 	}
 	if tx.Error != nil {
 		return nil, tx.Error
@@ -56,7 +57,7 @@ func FetchCityFromApi(params CitySearchParameters, db *gorm.DB, ctx context.Cont
 }
 
 func GetCityQuery(db *gorm.DB, params CitySearchParameters) *gorm.DB {
-	query := db.Model(&domain.City{})
+	query := db.Model(&domain.City{}).Order("name asc")
 	if len(params.search) > 0 {
 		query = query.Where("name ilike ?", fmt.Sprintf("%%%s%%", params.search))
 	}
