@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"gobnb/internal/bootstrap"
@@ -9,6 +10,8 @@ import (
 	"gobnb/internal/domain"
 	"gobnb/internal/errs"
 	"gobnb/internal/importer"
+	"gobnb/internal/services/geoapify"
+	"gobnb/internal/services/geocode"
 	"io"
 	"io/fs"
 	"log"
@@ -20,14 +23,21 @@ import (
 )
 
 func main() {
-	_ = bootstrap.Initialize()
+	ctx := bootstrap.Initialize()
 	configuration.Load()
-	filename := flag.String("file", "listings.csv", "filename to import (relative to seed_data dir)")
+
+	var skipGeo bool
+	var filename string
+
+	flag.StringVar(&filename, "file", "listings.csv", "filename to import (relative to seed_data dir)")
+	flag.BoolVar(&skipGeo, "skipgeo", false, "if we should skip geocoding on import")
 	flag.Parse()
-	handle, err := resolveFileByName(*filename)
+
+	handle, err := resolveFileByName(filename)
 	if err != nil {
-		fmt.Printf("failed to resolve import filename %s: %s", *filename, err.Error())
+		fmt.Printf("failed to resolve import filename %s: %s", filename, err.Error())
 	}
+
 	//make sure we close the file handle
 	defer func(handle *os.File) {
 		err := handle.Close()
@@ -35,12 +45,15 @@ func main() {
 			fmt.Printf("failed to close seed file %s: %s", handle.Name(), err.Error())
 		}
 	}(handle)
+
 	db, err := configuration.GetDatabaseConfiguration().Open()
+
 	log.Printf("Seeding started (%s)", handle.Name())
 	if err != nil {
 		fmt.Printf("failed to open db connection: %s", err.Error())
 		return
 	}
+
 	start := time.Now()
 	log.Println("Resolving dependent records (property types, amenities, etc)")
 	if err := createDependentRecords(handle, db); err != nil {
@@ -52,14 +65,18 @@ func main() {
 		fmt.Printf("failed to import listing records from file %s: %s\n", handle.Name(), err.Error())
 		return
 	}
+	if !skipGeo {
+		log.Println("Reverse-geocoding listings to prime cities cache...")
+		if err := reverseGeocodeListings(handle, db, ctx); err != nil {
+			fmt.Printf("failed to geocode listing records: %s", err.Error())
+			return
+		}
+		log.Println("Geocoding complete")
+	}
+
 	end := time.Now()
 	elapsed := end.Sub(start).Abs().String()
 	log.Println("import complete. finished in " + elapsed)
-	log.Println("Reverse-geocoding listings to prime cities cache...")
-	if err := reverseGeocodeListings(handle, db); err != nil {
-		fmt.Printf("failed to geocode listing records: %s", err.Error())
-		return
-	}
 }
 
 func createDependentRecords(file *os.File, db *gorm.DB) error {
@@ -167,13 +184,15 @@ func importListingRecords(file *os.File, db *gorm.DB) error {
 }
 
 // geohash the location to normalize the locations before lookup and prevent a bunch of lookups that are relatively close to each other
-func reverseGeocodeListings(file *os.File, db *gorm.DB) error {
+func reverseGeocodeListings(file *os.File, db *gorm.DB, ctx context.Context) error {
 	//rewind reader pointer to the start of the file
 	_, err := file.Seek(0, 0)
 	if err != nil {
 		return err
 	}
-	geoqueue := make(map[string]bool)
+	queue := make(map[string]bool)
+
+	//parse the listing and append a geohash for each listing to our dataset
 	err = importer.StreamHeaderAwareImport[KeyValueRecord](
 		file,
 		func(header []string, record []string) (KeyValueRecord, error) {
@@ -188,8 +207,9 @@ func reverseGeocodeListings(file *os.File, db *gorm.DB) error {
 				if err != nil {
 					return fmt.Errorf("failed to parse listing: %w", err)
 				}
-				locHash := calculateCityHash(listing.Location)
-				geoqueue[locHash] = true
+				point := listing.Location.ToPoint()
+				locHash := point.Hash()
+				queue[locHash] = true
 			}
 			return nil
 		},
@@ -197,12 +217,32 @@ func reverseGeocodeListings(file *os.File, db *gorm.DB) error {
 	if err != nil {
 		return err
 	}
-	log.Printf("Found %d unique geohashes to reverse-geocode", len(geoqueue))
-	for hash := range geoqueue {
+
+	log.Printf("Found %d unique geohashes to reverse-geocode", len(queue))
+	//reverse-geocode each set and push it into a new bulk-insert list
+	bulk := make([]domain.City, 0)
+	for hash := range queue {
 		lat, lng := geohash.Decode(hash)
-		//loc := domain.Location{Latitude: lat, Longitude: lng}
-		fmt.Printf("Reverse-geocoding %f, %f to a city record!\n", lat, lng)
+		loc := domain.Location{Latitude: lat, Longitude: lng}
+		res, err := geocode.ReverseGeocode(loc.ToPoint(), geoapify.ResultLevelCity, ctx)
+		if err != nil {
+			return err
+		}
+		log.Printf("Found city %s (%f, %f) %s\n", res.FormattedName, lat, lng, hash)
+		resolvedCityLoc := domain.Location{
+			Latitude:  res.Latitude,
+			Longitude: res.Longitude,
+		}
+		bulk = append(bulk, domain.City{
+			Location:    resolvedCityLoc,
+			Name:        res.Name,
+			SubDivision: res.State,
+			Timezone:    res.Timezone.Name,
+			FullName:    res.FormattedName,
+			Hash:        hash,
+		})
 	}
+	db.CreateInBatches(bulk, 100)
 	return nil
 }
 
@@ -224,8 +264,4 @@ func rewindFileHandle(file *os.File) error {
 		return fmt.Errorf("rewind input file: %w", err)
 	}
 	return nil
-}
-
-func calculateCityHash(location domain.Location) string {
-	return geohash.EncodeWithPrecision(location.Latitude, location.Longitude, 5)
 }

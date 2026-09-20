@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"gobnb/internal/domain"
+	"gobnb/internal/geo"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
@@ -39,7 +40,10 @@ func GetRequestsFromParams(c *gin.Context) (SearchParameters, error) {
 	}
 
 	return SearchParameters{
-		SearchNear:  domain.GetLocation(lat, lng),
+		SearchNear: geo.Point{
+			Latitude:  lat,
+			Longitude: lng,
+		},
 		MaxDistance: maxDistance,
 	}, nil
 }
@@ -52,7 +56,7 @@ const (
 )
 
 type SearchParameters struct {
-	SearchNear  domain.Location
+	SearchNear  geo.Point
 	MaxDistance int //max distance in meters
 }
 

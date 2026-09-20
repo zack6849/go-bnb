@@ -6,7 +6,8 @@ CREATE TABLE cities (
     -- https://en.wikipedia.org/wiki/ISO_3166-2 representation of where the city is
     subdivision text,
     full_name text,
-    timezone text
+    timezone text,
+    hash text unique
 );
 
 -- +goose Down

@@ -3,6 +3,8 @@ package domain
 import (
 	"database/sql/driver"
 	"fmt"
+	"gobnb/internal/geo"
+	"strconv"
 
 	"github.com/twpayne/go-geom"
 	"github.com/twpayne/go-geom/encoding/ewkbhex"
@@ -16,11 +18,17 @@ type Location struct {
 	Longitude float64
 }
 
-func GetLocation(lat float64, lng float64) Location {
+func (l Location) ParseLocation(latStr string, lngStr string) (Location, error) {
+	zero := Location{}
+	lat, err := strconv.ParseFloat(latStr, 64)
+	if err != nil {
+		return zero, err
+	}
+	lng, err := strconv.ParseFloat(lngStr, 64)
 	return Location{
 		Latitude:  lat,
 		Longitude: lng,
-	}
+	}, nil
 }
 
 // GormDataType tells GORM this field maps to a single column, not a relation.
@@ -33,6 +41,13 @@ func (l Location) Value() (driver.Value, error) {
 	// PostGIS orders coordinates x, y — longitude first.
 	point := geom.NewPointFlat(geom.XY, []float64{l.Longitude, l.Latitude}).SetSRID(wgs84SRID)
 	return ewkbhex.Encode(point, ewkbhex.NDR)
+}
+
+func (l Location) ToPoint() *geo.Point {
+	return &geo.Point{
+		Latitude:  l.Latitude,
+		Longitude: l.Longitude,
+	}
 }
 
 // Scan decode hex-encoded EWKB that PostGIS returns for geography columns.

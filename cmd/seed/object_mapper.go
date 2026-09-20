@@ -52,7 +52,7 @@ func ExtractListingFromRecord(record KeyValueRecord) (domain.Listing, error) {
 		Description:    record["description"],
 		MinNights:      minNights,
 		MaxNights:      maxNights,
-		Location:       domain.GetLocation(latFloat, lngFloat),
+		Location:       domain.Location{Latitude: latFloat, Longitude: lngFloat},
 		DistanceMeters: 0,
 		Hosts:          hosts,
 		Amenities:      amenities,
