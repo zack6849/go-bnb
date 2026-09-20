@@ -5,8 +5,8 @@ import (
 )
 
 type DatabaseDrivenList struct {
-	UUIDIdentifier `json:"id"`
-	Name           string `json:"name"`
+	UUIDIdentifier
+	Name string
 }
 
 type UUIDIdentifier struct {

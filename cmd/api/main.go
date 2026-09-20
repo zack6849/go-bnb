@@ -3,11 +3,13 @@ package main
 import (
 	"gobnb/internal/bootstrap"
 	"gobnb/internal/configuration"
-	"gobnb/internal/dto"
-	"gobnb/internal/services/search"
+	"gobnb/internal/services/city_search"
+	"gobnb/internal/services/listing_search"
+	"log"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 )
 
 func setupRouter() *gin.Engine {
@@ -15,56 +17,83 @@ func setupRouter() *gin.Engine {
 	return router
 }
 
-func addListingsRoute(router *gin.Engine) *gin.Engine {
-	router.GET("/api/listings", FetchListings)
+func addListingsRoute(router *gin.Engine, db *gorm.DB) *gin.Engine {
+	router.GET("/api/listings/search", FetchListings(db))
 	return router
 }
 
-func addGeocodingRoute(router *gin.Engine) *gin.Engine {
-	router.GET("/api/cities/search", SearchCities)
+func addCitySearchRoute(router *gin.Engine, db *gorm.DB) *gin.Engine {
+	router.GET("/api/cities/search", SearchCities(db))
 	return router
 }
 
 func main() {
 	_ = bootstrap.Initialize()
 	configuration.Load()
+	db, err := configuration.GetDatabaseConfiguration().Open()
+	if err != nil {
+		log.Fatal(err)
+		return
+	}
 	// Create a Gin router with default middleware (logger and recovery)
 	router := setupRouter()
-	router = addListingsRoute(router)
+	router = addListingsRoute(router, db)
+	router = addCitySearchRoute(router, db)
 	// Start server on port 8080 (default)
 	// Server will listen on 0.0.0.0:8080 (localhost:8080 on Windows)
-	err := router.Run()
+	err = router.Run()
 	if err != nil {
 		return
 	}
 }
+func FetchListings(db *gorm.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		params, err := listing_search.GetRequestsFromParams(c)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error":   err.Error(),
+				"message": "failed to parse request parameters",
+			})
+			return
+		}
+		relatedListings, err := listing_search.FindMatchingListings(params, db)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error": err.Error(),
+			})
+			return
+		}
+		// Return JSON response
+		c.JSON(http.StatusOK, gin.H{
+			"results": relatedListings,
+		})
+	}
 
-func FetchListings(c *gin.Context) {
-	params, err := dto.GetRequestsFromParams(c)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error":   err.Error(),
-			"message": "failed to parse request parameters",
-		})
-		return
-	}
-	relatedListings, err := search.FindMatchingListings(params)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": err.Error(),
-		})
-		return
-	}
-	// Return JSON response
-	c.JSON(http.StatusOK, gin.H{
-		"listings": relatedListings,
-	})
 }
 
-// search cities takes a substring, eg: ?search=Al and returns a list of cities matching the substring
+// SearchCities search cities takes a substring, eg: ?search=Al and returns a list of cities matching the substring
 // should return an array of cities with a lat and lng and their name
-// should also defer to the geoapify API when we don't have a cached copy of a city with that match
-// and should create new records as we go, cities don't move :)
-func SearchCities(c *gin.Context) {
-
+// TODO: extract this shared logic out into some kind of common APIResponse function that takes a search parameter DTO and returns a slice of structs as a response
+func SearchCities(db *gorm.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		params, err := city_search.GetRequestsFromParams(c)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"message": "failed to parse request parameters",
+				"error":   err.Error(),
+			})
+			return
+		}
+		relatedListings, err := city_search.FindMatchingCities(params, db, c)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error": err.Error(),
+			})
+			return
+		}
+		// Return JSON response
+		c.JSON(http.StatusOK, gin.H{
+			"results": relatedListings,
+		})
+	}
 }

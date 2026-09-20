@@ -1,21 +1,21 @@
-package search
+package listing_search
 
 import (
 	"fmt"
 	"gobnb/internal/configuration"
 	"gobnb/internal/db_assertions"
 	"gobnb/internal/domain"
-	"gobnb/internal/dto"
+	"gobnb/internal/geo"
 	"testing"
 )
 
 const NycLat = 40.7128
 const NycLng = -74.006
 
-func GetParameters() dto.SearchParameters {
-	return dto.SearchParameters{
+func GetParameters() ListingSearchParameters {
+	return ListingSearchParameters{
 		MaxDistance: 30,
-		SearchNear: domain.Location{
+		SearchNear: geo.Point{
 			Latitude:  NycLat,
 			Longitude: NycLng,
 		},

@@ -1,4 +1,4 @@
-package dto
+package listing_search
 
 import (
 	"fmt"
@@ -19,7 +19,7 @@ func GetGinTestContext() *gin.Context {
 	return c
 }
 
-func SendRequest(values url.Values) (SearchParameters, error) {
+func SendRequest(values url.Values) (ListingSearchParameters, error) {
 	c := GetGinTestContext()
 	route := ListingApiUrl
 	params := values.Encode()

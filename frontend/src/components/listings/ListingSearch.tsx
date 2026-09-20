@@ -2,27 +2,25 @@ import {useState} from "react";
 import {ListingResultView} from "@/components/listings/ListingResultView.tsx";
 import type {Listing} from "@/types/Listing.ts";
 import ListingSearchForm from "@/components/listings/ListingSearchForm.tsx";
+import type {City} from "@/types/City.ts";
 
-async function fetchListings(term: string) {
-    // const value = await geocode(term);
-    // const coords = value.features[0].geometry.coordinates;
+async function fetchListings(term: string, latitude: string, longitude: string) {
     const params = new URLSearchParams();
     params.append("search", term);
-    // params.append("latitude", coords[1]);
-    // params.append("longitude", coords[0]);
-    params.append("latitude", "42.6511674")
-    params.append("longitude", "-73.754968")
-    const response = await fetch(`/api/listings?${params}`);
+    params.append("latitude", latitude)
+    params.append("longitude", longitude)
+    const response = await fetch(`/api/listings/search?${params}`);
     return await response.json();
 }
 
 export default function ListingSearch() {
 
-    function handleSearch(term: string) {
-        fetchListings(term).then((response: { listings: Listing[] }) => {
-            setListings(response.listings)
-            setShowResults(true)
-        })
+    function handleSearch(term: string, city: City) {
+        fetchListings(term, city.Location.Latitude.toString(), city.Location.Longitude.toString())
+            .then((response: { results: Listing[] }) => {
+                setListings(response.results)
+                setShowResults(true)
+            })
     }
 
     const [showResults, setShowResults] = useState(false);

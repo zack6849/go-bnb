@@ -1,29 +1,24 @@
-package search
+package listing_search
 
 import (
-	"gobnb/internal/configuration"
 	"gobnb/internal/domain"
-	"gobnb/internal/dto"
 
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
 
-func FindMatchingListings(params dto.SearchParameters) ([]domain.Listing, error) {
+func FindMatchingListings(params ListingSearchParameters, db *gorm.DB) ([]domain.Listing, error) {
+	offset := (params.Page - 1) * params.Limit
 	results := make([]domain.Listing, 0)
-	db, err := configuration.GetDatabaseConfiguration().Open()
-	if err != nil {
-		return results, err
-	}
 	query := GetListingQuery(db, params)
-	tx := query.Find(&results)
+	tx := query.Offset(offset).Limit(params.Limit).Find(&results)
 	if tx.Error != nil {
 		return nil, tx.Error
 	}
 	return results, nil
 }
 
-func GetListingQuery(db *gorm.DB, params dto.SearchParameters) *gorm.DB {
+func GetListingQuery(db *gorm.DB, params ListingSearchParameters) *gorm.DB {
 	return db.Model(&domain.Listing{}).
 		Select("listings.*, st_distance(location, st_makepoint(?, ?)) as distance_meters",
 			params.SearchNear.Longitude,

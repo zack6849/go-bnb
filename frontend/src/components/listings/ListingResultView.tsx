@@ -7,7 +7,7 @@ interface ListingResultProps {
 
 export function ListingResultView(props: ListingResultProps) {
     let listingsComponents = props.listings.map((l => {
-        return (<ListingCard className={"mx-2"} key={l.ID} listing={l}/>)
+        return (<ListingCard key={l.ID} listing={l}/>)
     }));
 
     return (

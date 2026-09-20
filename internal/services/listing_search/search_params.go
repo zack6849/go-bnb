@@ -1,4 +1,4 @@
-package dto
+package listing_search
 
 import (
 	"errors"
@@ -10,10 +10,13 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func GetRequestsFromParams(c *gin.Context) (SearchParameters, error) {
-	var zero SearchParameters
+func GetRequestsFromParams(c *gin.Context) (ListingSearchParameters, error) {
+	var zero ListingSearchParameters
 	maxDistance := 30_000 //30km
 	distParam, ok := c.GetQuery("distance")
+	limitParam, limitExists := c.GetQuery("limit")
+	pageParam, pageParamExists := c.GetQuery("page")
+
 	if ok {
 		parsed, err := strconv.Atoi(distParam)
 		if err != nil {
@@ -21,6 +24,24 @@ func GetRequestsFromParams(c *gin.Context) (SearchParameters, error) {
 		}
 		//overwrite the default value of 30 if present in the request
 		maxDistance = parsed
+	}
+
+	limit := 50
+	if limitExists {
+		parsed, err := strconv.Atoi(limitParam)
+		if err != nil {
+			return zero, fmt.Errorf("failed to parse limit, can't convert '%s' to int: %w", limitParam, err)
+		}
+		limit = parsed
+	}
+
+	pageNum := 1
+	if pageParamExists {
+		parsed, err := strconv.Atoi(pageParam)
+		if err != nil {
+			return zero, fmt.Errorf("failed to parse page number, can't convert '%s' to int: %w", pageParam, err)
+		}
+		pageNum = parsed
 	}
 
 	valLat, latExists := c.GetQuery("latitude")
@@ -39,12 +60,14 @@ func GetRequestsFromParams(c *gin.Context) (SearchParameters, error) {
 		return zero, fmt.Errorf("failed to parse longitude value '%s' to float: %w", valLng, err)
 	}
 
-	return SearchParameters{
+	return ListingSearchParameters{
 		SearchNear: geo.Point{
 			Latitude:  lat,
 			Longitude: lng,
 		},
 		MaxDistance: maxDistance,
+		Limit:       limit,
+		Page:        pageNum,
 	}, nil
 }
 
@@ -55,9 +78,11 @@ const (
 	ListSearchAnd
 )
 
-type SearchParameters struct {
+type ListingSearchParameters struct {
 	SearchNear  geo.Point
 	MaxDistance int //max distance in meters
+	Limit       int
+	Page        int
 }
 
 type PriceFilter struct {

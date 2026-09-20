@@ -27,7 +27,7 @@ func ReverseGeocode(point *geo.Point, level geoapify.ResultSpecificityLevel, ctx
 
 	zero := geoapify.ReverseGeocodingResult{}
 	client := GetGeocodingClient()
-	res, err := client.ReverseGeocode(point, level, ctx)
+	res, err := client.ReverseGeocodePoint(point, level, ctx)
 	if err != nil {
 		return zero, err
 	}
@@ -50,6 +50,32 @@ func ReverseGeocode(point *geo.Point, level geoapify.ResultSpecificityLevel, ctx
 	return res, nil
 }
 
+func CitySearch(search string, level geoapify.ResultSpecificityLevel, ctx context.Context) (geoapify.GeocodeSearchResult, error) {
+	zero := geoapify.GeocodeSearchResult{}
+	client := GetGeocodingClient()
+	result, err := client.Autocomplete(search, level, ctx)
+	if err != nil {
+		return zero, fmt.Errorf("failed to geocode '%s' at level '%s' %w", search, level, err)
+	}
+	if result.ResultLevel != geoapify.ResultLevelCity {
+		return result, fmt.Errorf("received non-%s result level back %s for term %s", level, result.ResultLevel, search)
+	}
+	return result, err
+}
+
+func Geocode(search string, level geoapify.ResultSpecificityLevel, ctx context.Context) (geoapify.GeocodeSearchResult, error) {
+	zero := geoapify.GeocodeSearchResult{}
+	client := GetGeocodingClient()
+	result, err := client.Geocode(search, level, ctx)
+	if err != nil {
+		return zero, fmt.Errorf("failed to geocode '%s' at level '%s' %w", search, level, err)
+	}
+	if result.ResultLevel != geoapify.ResultLevelCity {
+		return result, fmt.Errorf("received non-%s result level back %s for term %s", level, result.ResultLevel, search)
+	}
+	return result, err
+}
+
 func GridBasedFallback(point *geo.Point, level geoapify.ResultSpecificityLevel, client geoapify.Client, ctx context.Context) (geoapify.ReverseGeocodingResult, error) {
 	zero := geoapify.ReverseGeocodingResult{}
 	for _, p := range point.SubdivideIntoGrid(4, geo.HashLevelCity) {
@@ -64,7 +90,7 @@ func GridBasedFallback(point *geo.Point, level geoapify.ResultSpecificityLevel, 
 }
 
 func ReverseGeocodePoint(point *geo.Point, level geoapify.ResultSpecificityLevel, client geoapify.Client, ctx context.Context) (geoapify.ReverseGeocodingResult, error) {
-	return client.ReverseGeocode(point, level, ctx)
+	return client.ReverseGeocodePoint(point, level, ctx)
 }
 
 func GetGeocodingClient() geoapify.Client {

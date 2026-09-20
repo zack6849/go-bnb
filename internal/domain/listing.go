@@ -7,9 +7,9 @@ import (
 type Listing struct {
 	UUIDIdentifier
 	PublicID       uuid.UUID `gorm:"type:uuid;default:uuidv4()"`
-	PropertyTypeID uuid.UUID
+	PropertyTypeID uuid.UUID `json:"-"`
 	PropertyType   PropertyType
-	RoomTypeID     uuid.UUID
+	RoomTypeID     uuid.UUID `json:"-"`
 	RoomType       RoomType
 	AirbnbID       int
 	Accommodates   int
