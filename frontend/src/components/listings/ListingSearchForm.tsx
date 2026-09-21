@@ -23,10 +23,12 @@ export default function ListingSearchForm(
   props: Readonly<ListingSearchFormProps>
 ) {
   function getHeader(location: string) {
+    const city = location.trim()
     return (
-      <h1 className={"text-3xl"}>
-        Let's go <b className={"text-primary"}>{location}</b> together
-      </h1>
+        <h1 className={"text-3xl"}>
+          Let's go {city ? "to " : ""}
+          <b className={"text-primary"}>{city || "somewhere"}</b> together
+        </h1>
     )
   }
 
@@ -46,10 +48,10 @@ export default function ListingSearchForm(
     props.onSearch(newValue, city)
   }
 
-  const location = list.filterText ? `to ${list.filterText}` : `somewhere`
+  const location = list.filterText
   const items = list.items.map((c: City) => {
     return (
-      <ComboboxItem key={c.ID} onClick={() => handleSearchUpdate(c.Name, c)}>
+      <ComboboxItem key={c.ID} value={c} onClick={() => handleSearchUpdate(c.Name, c)}>
         {c.Name}
       </ComboboxItem>
     )
@@ -58,12 +60,14 @@ export default function ListingSearchForm(
   const header = getHeader(location)
   let content: React.JSX.Element[] | React.JSX.Element = (
     <div className={"p-4"}>
+      <img src={"public/undraw_next-adventure_pzln.svg"} className={"w-1/4 my-4"}/>
       <Combobox<City>
         items={list.items}
         inputValue={list.filterText}
         onInputValueChange={list.setFilterText}
       >
         <ComboboxInput
+          className={"[&_input]:placeholder:text-2xl"}
           placeholder={getPlaceholderText()}
           value={list.filterText}
         />
@@ -76,9 +80,9 @@ export default function ListingSearchForm(
   )
 
   return (
-    <Card>
+    <Card className={"flex justify-center w-2/3 m-auto"}>
       <CardHeader>{header}</CardHeader>
-      <CardContent>{content}</CardContent>
+      <CardContent >{content}</CardContent>
     </Card>
   )
 }
